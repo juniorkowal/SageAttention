@@ -17,13 +17,15 @@ limitations under the License.
 import torch, math
 import triton
 import triton.language as tl
+from .utils import autotune_configs
 
 @triton.jit
 def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, qo_len, kv_len,
                     K_ptrs, K_scale_ptr, V_ptrs, stride_kn, stride_vn, 
                     start_m, mask_ptrs, stride_maskn,
                     BLOCK_M: tl.constexpr, HEAD_DIM: tl.constexpr, BLOCK_N: tl.constexpr,  
-                    STAGE: tl.constexpr, offs_m: tl.constexpr, offs_n: tl.constexpr,  
+                    # STAGE: tl.constexpr, 
+                    offs_m: tl.constexpr, offs_n: tl.constexpr,  
                     ):
     lo, hi = 0, kv_len
     for start_n in range(lo, hi, BLOCK_N):
@@ -72,6 +74,9 @@ def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, qo_len, kv_len,
         V_ptrs += BLOCK_N * stride_vn
     return acc, l_i, m_i
 
+@triton.autotune(configs=autotune_configs, 
+                 key=["HEAD_DIM", "H", "num_kv_groups", "RETURN_LSE", "qo_len", "kv_len"]
+                 )
 @triton.jit
 def _attn_fwd(Q, K, V, Q_scale, K_scale, Out, mask, Lse, 
               stride_qz, stride_qh, stride_qn,
@@ -83,7 +88,7 @@ def _attn_fwd(Q, K, V, Q_scale, K_scale, Out, mask, Lse,
               HEAD_DIM: tl.constexpr,  
               BLOCK_M: tl.constexpr,  
               BLOCK_N: tl.constexpr,  
-              STAGE: tl.constexpr,
+            #   STAGE: tl.constexpr,
               RETURN_LSE: tl.constexpr,
               ):
     start_m = tl.program_id(0)
@@ -117,7 +122,8 @@ def _attn_fwd(Q, K, V, Q_scale, K_scale, Out, mask, Lse,
     acc, l_i, m_i = _attn_fwd_inner(acc, l_i, m_i, q, q_scale, qo_len, kv_len, K_ptrs, K_scale_ptr, V_ptrs, stride_kn, stride_vn,
                                     start_m, mask_ptrs, stride_maskn,
                                     BLOCK_M, HEAD_DIM, BLOCK_N,  
-                                    4 - STAGE, offs_m, offs_n 
+                                    # 4 - STAGE, 
+                                    offs_m, offs_n 
                                     )
     acc = acc / l_i[:, None]
     tl.store(O_block_ptr, acc.to(Out.type.element_ty), mask = (offs_m[:, None] < qo_len))
@@ -128,9 +134,9 @@ def _attn_fwd(Q, K, V, Q_scale, K_scale, Out, mask, Lse,
         tl.store(lse_ptrs, l_i, mask = (offs_m < qo_len))
 
 def forward(q, k, v, q_scale, k_scale, tensor_layout="HND", attn_mask=None, output_dtype=torch.float16, return_lse=False):
-    BLOCK_M = 128
-    BLOCK_N = 64
-    stage = 1
+    # BLOCK_M = 128
+    # BLOCK_N = 64
+    # stage = 1
 
     o = torch.empty(q.shape, dtype=output_dtype, device=q.device)
 
@@ -166,7 +172,8 @@ def forward(q, k, v, q_scale, k_scale, tensor_layout="HND", attn_mask=None, outp
     else:
         lse = torch.empty([0], dtype=torch.float32, device='cpu')
 
-    grid = (triton.cdiv(qo_len, BLOCK_M), h_qo, b)
+    # grid = (triton.cdiv(qo_len, BLOCK_M), h_qo, b)
+    grid = lambda META: (triton.cdiv(qo_len, META['BLOCK_M']), h_qo, b)
     _attn_fwd[grid](
         q, k, v, q_scale, k_scale, o, attn_mask, lse,
         stride_bz_q, stride_h_q, stride_seq_q, 
@@ -176,9 +183,12 @@ def forward(q, k, v, q_scale, k_scale, tensor_layout="HND", attn_mask=None, outp
         stride_bz_mask, stride_h_mask, stride_m_mask, stride_n_mask,
         qo_len, kv_len,
         h_qo, num_kv_groups,
-        BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, HEAD_DIM=HEAD_DIM_K,  
-        STAGE=stage, RETURN_LSE=return_lse,
-        num_warps=4 if head_dim == 64 else 8,
-        num_stages=3 if head_dim == 64 else 4)
+        # BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, 
+        HEAD_DIM=HEAD_DIM_K,  
+        # STAGE=stage, 
+        RETURN_LSE=return_lse,
+        # num_warps=4 if head_dim == 64 else 8,
+        # num_stages=3 if head_dim == 64 else 4
+        )
 
     return o, lse
