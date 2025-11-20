@@ -23,6 +23,7 @@ from .triton.attn_qk_int8_per_block import forward as attn_false
 from .triton.attn_qk_int8_per_block_causal import forward as attn_true
 from .triton.attn_qk_int8_block_varlen import forward as attn_false_varlen
 from .triton.attn_qk_int8_per_block_causal_varlen import forward as attn_true_varlen
+from .triton.sparse_int8_attn import forward as sparse_sageattn_fwd
 
 from .triton.quant_per_thread import per_thread_int8 as per_thread_int8_triton
 
@@ -155,7 +156,42 @@ def sageattn(
     elif arch == "sm120":
         return sageattn_qk_int8_pv_fp8_cuda(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, qk_quant_gran="per_warp", sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32+fp16") # sm120 has accurate fp32 accumulator for fp8 mma and triton kernel is currently not usable on sm120.
     else:
+        # TODO: specify rocm arch? add qk_quant_gran="per_warp"?
         return sageattn_qk_int8_pv_fp16_triton(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse)
+
+
+# https://github.com/jt-zhang/Sparse_SageAttention_API.git
+def sparse_sageattn(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    tensor_layout: str = "HND",
+    is_causal: bool = False,
+    sm_scale: Optional[float] = None,
+    mask_id = None,
+    # return_lse: bool = False,
+    **kwargs: Any,
+):
+    BLOCK_M = 128
+    BLOCK_N = 64
+    if mask_id is None:
+        mask_id = torch.ones((q.shape[0], q.shape[1], (q.shape[2] + BLOCK_M - 1)//BLOCK_M, (q.shape[3] + BLOCK_N - 1)//BLOCK_N), dtype=torch.int8, device=q.device) # TODO
+
+    output_dtype = q.dtype
+    if output_dtype == torch.bfloat16 or output_dtype == torch.float32:
+        v = v.to(torch.float16)
+    
+    seq_dim = 1 if tensor_layout == "NHD" else 2
+    km = k.mean(dim=seq_dim, keepdim=True)
+    # km = torch.zeros((k.size(0), k.size(1), 1, k.size(3)), dtype=torch.float16, device=k.device)  # Placeholder for mean, not used in quantization
+
+    q_int8, q_scale, k_int8, k_scale = per_block_int8_triton(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
+    
+    o = sparse_sageattn_fwd(
+        q_int8, k_int8, mask_id, v, q_scale, k_scale, 
+        is_causal=is_causal, tensor_layout=tensor_layout, output_dtype=output_dtype
+    )
+    return o
 
 
 def sageattn_qk_int8_pv_fp16_triton(

@@ -19,7 +19,7 @@ import triton
 import triton.language as tl
 from .utils import autotune_configs
 
-MAX_BLOCK_M = max(c.kwargs.get('BLOCK_M', 64) for c in autotune_configs)
+MAX_BLOCK_M = max(c.kwargs.get('BLOCK_M', 128) for c in autotune_configs)
 MAX_BLOCK_N = max(c.kwargs.get('BLOCK_N', 64) for c in autotune_configs)
 
 @triton.autotune(
