@@ -23,7 +23,9 @@ from .triton.attn_qk_int8_per_block import forward as attn_false
 from .triton.attn_qk_int8_per_block_causal import forward as attn_true
 from .triton.attn_qk_int8_block_varlen import forward as attn_false_varlen
 from .triton.attn_qk_int8_per_block_causal_varlen import forward as attn_true_varlen
-from .triton.sparse_int8_attn import forward as sparse_sageattn_fwd
+from .triton.sparse_int8_attn1 import forward as sparse_sageattn_fwd1
+from .triton.sparse_int8_attn2 import forward as sparse_sageattn_fwd2
+from .triton.utils import hyperparameter_check, get_block_map_meansim
 
 from .triton.quant_per_thread import per_thread_int8 as per_thread_int8_triton
 
@@ -161,7 +163,8 @@ def sageattn(
 
 
 # https://github.com/jt-zhang/Sparse_SageAttention_API.git
-def sparse_sageattn(
+@torch.compiler.disable
+def sparse_sageattn1(
     q: torch.Tensor,
     k: torch.Tensor,
     v: torch.Tensor,
@@ -187,10 +190,50 @@ def sparse_sageattn(
 
     q_int8, q_scale, k_int8, k_scale = per_block_int8_triton(q, k, km=km, sm_scale=sm_scale, tensor_layout=tensor_layout)
     
-    o = sparse_sageattn_fwd(
+    o = sparse_sageattn_fwd1(
         q_int8, k_int8, mask_id, v, q_scale, k_scale, 
         is_causal=is_causal, tensor_layout=tensor_layout, output_dtype=output_dtype
     )
+    return o
+
+
+# https://github.com/thu-ml/SpargeAttn.git
+@torch.compiler.disable
+def sparse_sageattn2(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    tensor_layout: str = "HND",
+    is_causal: bool = False,
+    sm_scale: Optional[float] = None,
+    smooth_k=True, 
+    simthreshd1=0.3, 
+    cdfthreshd=0.96, 
+    pvthreshd=20, 
+    attention_sink=False, 
+    **kwargs: Any
+    ):
+    # assert q.size(-2)>=128, "seq_len should be not less than 128."
+
+    torch.cuda.set_device(v.device)
+
+    dtype = q.dtype
+    if dtype == torch.float32 or dtype == torch.float16:
+        q, k, v = q.contiguous().to(torch.float16), k.contiguous().to(torch.float16), v.contiguous().to(torch.float16)
+    else:
+        q, k, v = q.contiguous().to(torch.bfloat16), k.contiguous().to(torch.bfloat16), v.contiguous().to(torch.float16)
+
+    if smooth_k:
+        k = k - k.mean(dim=-2, keepdim=True)
+    k_block_indices = get_block_map_meansim(q, k, is_causal=is_causal, simthreshd1=simthreshd1, cdfthreshd=cdfthreshd, attention_sink=attention_sink)
+    # headdim = q.size(-1)
+
+    # assert headdim in [64, 128], "headdim should be in [64, 96, 128]."
+
+    q_int8, q_scale, k_int8, k_scale = per_block_int8_triton(q, k, sm_scale=sm_scale, tensor_layout=tensor_layout)
+    pvthreshd = hyperparameter_check(pvthreshd, q.size(-3), q.device)
+    o = sparse_sageattn_fwd2(q_int8, k_int8, k_block_indices, v, q_scale, k_scale, pvthreshd, is_causal=is_causal, tensor_layout=tensor_layout, output_dtype=dtype)
+
     return o
 
 
