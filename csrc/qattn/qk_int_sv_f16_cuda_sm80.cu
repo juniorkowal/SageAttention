@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#include "../utils.cuh"
+#include "../common/utils.cuh"
 #include <cuda_fp16.h>
 #include <cuda_pipeline_primitives.h>
 #include <torch/extension.h>
 
-#include "../cp_async.cuh"
-#include "../mma.cuh"
-#include "../permuted_smem.cuh"
-#include "../math.cuh"
-#include "../dispatch_utils.h"
+#include "../common/cp_async.cuh"
+#include "../common/mma.cuh"
+#include "../common/permuted_smem.cuh"
+#include "../common/math.cuh"
+#include "../common/dispatch_utils.h"
 
 #include "attn_utils.cuh"
 

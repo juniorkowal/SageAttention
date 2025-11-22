@@ -17,11 +17,11 @@
 #include <ATen/cuda/CUDAContext.h>
 #include <torch/extension.h>
 
-#include "../dispatch_utils.h"
-#include "../utils.cuh"
-#include "../reduction_utils.cuh"
-#include "../numeric_conversion.cuh"
-#include "../cp_async.cuh"
+#include "../common/dispatch_utils.h"
+#include "../common/utils.cuh"
+#include "../common/reduction_utils.cuh"
+#include "../common/numeric_conversion.cuh"
+#include "../common/cp_async.cuh"
 #include <cuda_fp16.h>
 #include <cuda_bf16.h>
 

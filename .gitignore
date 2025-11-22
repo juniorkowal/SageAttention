@@ -9,6 +9,14 @@ __pycache__
 evaluate/
 *.pkl
 *.vscode/
-bench_qk_int8_pv_fp8_cuda_head96.py
 *test.py
 *unmask.py
+*.hipi
+*_hip.h
+*_hip.cuh
+# *hip
+*_hip.hip
+*amdgcn*
+*.bc
+*.s
+fused.hip

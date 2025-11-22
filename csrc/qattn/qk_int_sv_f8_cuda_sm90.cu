@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include "../utils.cuh"
+#include "../common/utils.cuh"
 #include <cuda.h>
 #include <cuda_bf16.h>
 #include <cuda_fp8.h>
 #include <torch/extension.h>
 
-#include "../wgmma.cuh"
-#include "../math.cuh"
-#include "../dispatch_utils.h"
+#include "../common/wgmma.cuh"
+#include "../common/math.cuh"
+#include "../common/dispatch_utils.h"
 
 #include "attn_utils.cuh"
 
