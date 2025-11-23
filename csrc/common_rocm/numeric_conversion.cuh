@@ -17,133 +17,163 @@
  */
 
 #pragma once
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-#include <cuda_fp8.h>
-#include <cuda_runtime.h>
-#include <cuda/pipeline>
+#include <hip_bf16.h>
+#include <hip_fp16.h>
+#include <hip_fp8.h>
+#include <hip_runtime.h>
+// #include <cuda/pipeline>
+// #include <hip/pipeline>
 
-#if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120400)
-#if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 890))
-#define FP8_CAST_ENABLED
-#endif
-#endif
+// #if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120400)
+// #if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 890))
+// #define FP8_CAST_ENABLED
+// #endif
+// #endif
 
-#if defined(__CUDA_ARCH__)
-#define RUNTIME_ASSERT(x) __brkpt()
-#else
-#include <assert.h>
-#define RUNTIME_ASSERT(x) assert(0 && x)
-#endif
+// #if defined(__CUDA_ARCH__)
+// #define RUNTIME_ASSERT(x) __brkpt()
+// #else
+// #include <assert.h>
+// #define RUNTIME_ASSERT(x) assert(0 && x)
+// #endif
 
-__device__ __forceinline__ void unpack_half2_from_uint32_to_float(float* dest, uint32_t source) {
-  uint16_t h0 = source & 0xFFFF;
-  uint16_t h1 = (source >> 16) & 0xFFFF;
-  asm("cvt.f32.f16 %0, %1;" : "=f"(dest[0]) : "h"(h0));
-  asm("cvt.f32.f16 %0, %1;" : "=f"(dest[1]) : "h"(h1));
+// __device__ __forceinline__ void unpack_half2_from_uint32_to_float(float* dest, uint32_t source) {
+//   uint16_t h0 = source & 0xFFFF;
+//   uint16_t h1 = (source >> 16) & 0xFFFF;
+//   asm("cvt.f32.f16 %0, %1;" : "=f"(dest[0]) : "h"(h0));
+//   asm("cvt.f32.f16 %0, %1;" : "=f"(dest[1]) : "h"(h1));
+// }
+
+__device__ inline void unpack_half2_from_uint32_to_float(float* dest, uint32_t source) {
+    __half h0 = *reinterpret_cast<__half*>(&source);
+    __half h1 = *reinterpret_cast<__half*>(((char*)&source) + 2);
+
+    dest[0] = __half2float(h0);
+    dest[1] = __half2float(h1);
 }
 
-__device__ __forceinline__ void floatx4_to_e4m3x4(uint32_t *dest, float *source0, float *source1)
-{
-#ifdef FP8_CAST_ENABLED
-  asm volatile( \
-      "{\n" \
-      ".reg .b16 lo;\n" \
-      ".reg .b16 hi;\n" \
-      "cvt.rn.satfinite.e4m3x2.f32   lo, %2, %1;\n" \
-      "cvt.rn.satfinite.e4m3x2.f32   hi, %4, %3;\n" \
-      "mov.b32 %0, {lo, hi};\n" \
-      "}" \
-      : "=r"(dest[0]) : "f"(source0[0]), "f"(source0[1]), "f"(source1[0]), "f"(source1[1]));
-#else
-  RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
-#endif
-}
 
-__device__ __forceinline__ void floatx4_to_e5m2x4(uint32_t *dest, float *source0, float *source1)
-{
-#ifdef FP8_CAST_ENABLED
-  asm volatile( \
-      "{\n" \
-      ".reg .b16 lo;\n" \
-      ".reg .b16 hi;\n" \
-      "cvt.rn.satfinite.e5m2x2.f32   lo, %2, %1;\n" \
-      "cvt.rn.satfinite.e5m2x2.f32   hi, %4, %3;\n" \
-      "mov.b32 %0, {lo, hi};\n" \
-      "}" \
-      : "=r"(dest[0]) : "f"(source0[0]), "f"(source1[1]), "f"(source1[0]), "f"(source1[1]));
-#else
-  RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
-#endif
-}
+// __device__ __forceinline__ void floatx4_to_e4m3x4(uint32_t *dest, float *source0, float *source1)
+// {
+// #ifdef FP8_CAST_ENABLED
+//   asm volatile( \
+//       "{\n" \
+//       ".reg .b16 lo;\n" \
+//       ".reg .b16 hi;\n" \
+//       "cvt.rn.satfinite.e4m3x2.f32   lo, %2, %1;\n" \
+//       "cvt.rn.satfinite.e4m3x2.f32   hi, %4, %3;\n" \
+//       "mov.b32 %0, {lo, hi};\n" \
+//       "}" \
+//       : "=r"(dest[0]) : "f"(source0[0]), "f"(source0[1]), "f"(source1[0]), "f"(source1[1]));
+// #else
+//   RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
+// #endif
+// }
 
-__device__ __forceinline__ void halfx4_to_e4m3x4(uint32_t *dest, uint32_t *source0, uint32_t *source1)
-{
-#ifdef FP8_CAST_ENABLED
-  asm volatile( \
-      "{\n" \
-      ".reg .b16 lo;\n" \
-      ".reg .b16 hi;\n" \
-      "cvt.rn.satfinite.e4m3x2.f16x2   lo, %1;\n" \
-      "cvt.rn.satfinite.e4m3x2.f16x2   hi, %2;\n" \
-      "mov.b32 %0, {lo, hi};\n" \
-      "}" \
-      : "=r"(dest[0]) : "r"(source0[0]), "r"(source1[0]));
-#else
-  RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
-#endif
-}
+// __device__ __forceinline__ void floatx4_to_e5m2x4(uint32_t *dest, float *source0, float *source1)
+// {
+// #ifdef FP8_CAST_ENABLED
+//   asm volatile( \
+//       "{\n" \
+//       ".reg .b16 lo;\n" \
+//       ".reg .b16 hi;\n" \
+//       "cvt.rn.satfinite.e5m2x2.f32   lo, %2, %1;\n" \
+//       "cvt.rn.satfinite.e5m2x2.f32   hi, %4, %3;\n" \
+//       "mov.b32 %0, {lo, hi};\n" \
+//       "}" \
+//       : "=r"(dest[0]) : "f"(source0[0]), "f"(source1[1]), "f"(source1[0]), "f"(source1[1]));
+// #else
+//   RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
+// #endif
+// }
 
-__device__ __forceinline__ void halfx4_to_e5m2x4(uint32_t *dest, uint32_t *source0, uint32_t *source1)
-{
-#ifdef FP8_CAST_ENABLED
-  asm volatile( \
-      "{\n" \
-      ".reg .b16 lo;\n" \
-      ".reg .b16 hi;\n" \
-      "cvt.rn.satfinite.e5m2x2.f16x2   lo, %1;\n" \
-      "cvt.rn.satfinite.e5m2x2.f16x2   hi, %2;\n" \
-      "mov.b32 %0, {lo, hi};\n" \
-      "}" \
-      : "=r"(dest[0]) : "r"(source0[0]), "r"(source1[0]));
-#else
-  RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
-#endif
-}
+// __device__ __forceinline__ void halfx4_to_e4m3x4(uint32_t *dest, uint32_t *source0, uint32_t *source1)
+// {
+// #ifdef FP8_CAST_ENABLED
+//   asm volatile( \
+//       "{\n" \
+//       ".reg .b16 lo;\n" \
+//       ".reg .b16 hi;\n" \
+//       "cvt.rn.satfinite.e4m3x2.f16x2   lo, %1;\n" \
+//       "cvt.rn.satfinite.e4m3x2.f16x2   hi, %2;\n" \
+//       "mov.b32 %0, {lo, hi};\n" \
+//       "}" \
+//       : "=r"(dest[0]) : "r"(source0[0]), "r"(source1[0]));
+// #else
+//   RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
+// #endif
+// }
 
-__device__ __forceinline__ void e4m3x4_to_halfx4(uint32_t *dest0, uint32_t *dest1, uint32_t *source)
-{
-#ifdef FP8_CAST_ENABLED
-  asm volatile( \
-      "{\n" \
-      ".reg .b16 lo, hi;\n" \
-      "mov.b32 {lo, hi}, %2;\n" \
-      "cvt.rn.f16x2.e4m3x2 %0, lo;\n" \
-      "cvt.rn.f16x2.e4m3x2 %1, hi;\n" \
-      "}\n" : "=r"(dest0[0]), "=r"(dest1[0]) : "r"(source[0]));
-#else
-  RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
-#endif
-}
+// __device__ __forceinline__ void halfx4_to_e5m2x4(uint32_t *dest, uint32_t *source0, uint32_t *source1)
+// {
+// #ifdef FP8_CAST_ENABLED
+//   asm volatile( \
+//       "{\n" \
+//       ".reg .b16 lo;\n" \
+//       ".reg .b16 hi;\n" \
+//       "cvt.rn.satfinite.e5m2x2.f16x2   lo, %1;\n" \
+//       "cvt.rn.satfinite.e5m2x2.f16x2   hi, %2;\n" \
+//       "mov.b32 %0, {lo, hi};\n" \
+//       "}" \
+//       : "=r"(dest[0]) : "r"(source0[0]), "r"(source1[0]));
+// #else
+//   RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
+// #endif
+// }
 
-__device__ __forceinline__ void e5m2x4_to_halfx4(uint32_t *dest0, uint32_t *dest1, uint32_t *source)
-{
-#ifdef FP8_CAST_ENABLED
-  asm volatile( \
-      "{\n" \
-      ".reg .b16 lo, hi;\n" \
-      "mov.b32 {lo, hi}, %2;\n" \
-      "cvt.rn.f16x2.e5m2x2 %0, lo;\n" \
-      "cvt.rn.f16x2.e5m2x2 %1, hi;\n" \
-      "}\n" : "=r"(dest0[0]), "=r"(dest1[0]) : "r"(source[0]));
-#else
-  RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
-#endif
-}
+// __device__ __forceinline__ void e4m3x4_to_halfx4(uint32_t *dest0, uint32_t *dest1, uint32_t *source)
+// {
+// #ifdef FP8_CAST_ENABLED
+//   asm volatile( \
+//       "{\n" \
+//       ".reg .b16 lo, hi;\n" \
+//       "mov.b32 {lo, hi}, %2;\n" \
+//       "cvt.rn.f16x2.e4m3x2 %0, lo;\n" \
+//       "cvt.rn.f16x2.e4m3x2 %1, hi;\n" \
+//       "}\n" : "=r"(dest0[0]), "=r"(dest1[0]) : "r"(source[0]));
+// #else
+//   RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
+// #endif
+// }
 
-__device__ __forceinline__ int8_t float_to_int8_rn(float x)
-{
-    uint32_t dst;
-    asm volatile("cvt.rni.sat.s8.f32 %0, %1;" : "=r"(dst) : "f"(x));
-    return reinterpret_cast<const int8_t&>(dst);
+// __device__ __forceinline__ void e5m2x4_to_halfx4(uint32_t *dest0, uint32_t *dest1, uint32_t *source)
+// {
+// #ifdef FP8_CAST_ENABLED
+//   asm volatile( \
+//       "{\n" \
+//       ".reg .b16 lo, hi;\n" \
+//       "mov.b32 {lo, hi}, %2;\n" \
+//       "cvt.rn.f16x2.e5m2x2 %0, lo;\n" \
+//       "cvt.rn.f16x2.e5m2x2 %1, hi;\n" \
+//       "}\n" : "=r"(dest0[0]), "=r"(dest1[0]) : "r"(source[0]));
+// #else
+//   RUNTIME_ASSERT("Unsupported CUDA architecture for FP8 CAST instruction");
+// #endif
+// }
+
+// __device__ __forceinline__ int8_t float_to_int8_rn(float x)
+// {
+//     uint32_t dst;
+//     asm volatile("cvt.rni.sat.s8.f32 %0, %1;" : "=r"(dst) : "f"(x));
+//     return reinterpret_cast<const int8_t&>(dst);
+// }
+
+__device__ __forceinline__ int8_t float_to_int8_rn(float x) {
+  static constexpr auto i8_min = static_cast<float>(std::numeric_limits<int8_t>::min());
+  static constexpr auto i8_max = static_cast<float>(std::numeric_limits<int8_t>::max());
+
+  // To match the rounding mode of CUDA, we use nearbyint.
+  // It uses the current rounding mode, which is always FE_TONEAREST on HIP.
+  // If that changes in the future, we may need to set the rounding mode
+  // explicitly, either at runtime or compile time.
+  float dst = std::nearbyint(x);
+
+  // saturate
+  // See https://github.com/pytorch/pytorch/issues/127666
+  // See https://github.com/llvm/llvm-project/issues/95183
+  // hip-clang std::clamp __glibcxx_assert_fail host function when building on
+  // Arch/gcc14. The following replaces std::clamp usage with similar logic
+  // dst = std::clamp(dst, i8_min, i8_max);
+  dst = (dst < i8_min) ? i8_min : (dst > i8_max) ? i8_max : dst;
+  return static_cast<int8_t>(dst);
 }

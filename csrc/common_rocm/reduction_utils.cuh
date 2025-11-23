@@ -19,7 +19,8 @@
  */
 
 #pragma once
-#define FINAL_MASK 0xffffffff
+// #define FINAL_MASK 0xffffffff
+#define FINAL_MASK 0xffffffffffffffffULL
 
 namespace vllm {
 
@@ -27,7 +28,7 @@ template<typename T>
 __inline__ __device__ T warpReduceSum(T val) {
 #pragma unroll
   for (int mask = 16; mask > 0; mask >>= 1)
-    val += __shfl_xor_sync(0xffffffff, val, mask, 32);
+    val += __shfl_xor_sync(FINAL_MASK, val, mask, 32);
   return val;
 }
 
@@ -121,7 +122,7 @@ __inline__ __device__ T warpReduceMax(T val)
 {
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1)
-        val = max(val, __shfl_xor_sync(0xffffffff, val, mask, 32));
+        val = max(val, __shfl_xor_sync(FINAL_MASK, val, mask, 32));
     return val;
 }
 /* Calculate the maximum of all elements in a block */
@@ -170,7 +171,7 @@ __inline__ __device__ T warpReduceMin(T val)
 {
 #pragma unroll
     for (int mask = 16; mask > 0; mask >>= 1)
-        val = min(val, __shfl_xor_sync(0xffffffff, val, mask, 32));
+        val = min(val, __shfl_xor_sync(FINAL_MASK, val, mask, 32));
     return val;
 }
 /* Calculate the minimum of all elements in a block */

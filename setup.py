@@ -15,13 +15,13 @@ limitations under the License.
 """
 
 import os
-import sys
 import subprocess
+import sys
 import threading
 import warnings
-from packaging.version import parse, Version
 
-from setuptools import setup, find_packages
+from packaging.version import Version, parse
+from setuptools import find_packages, setup
 
 # Skip CUDA build in CI or when explicitly requested
 SKIP_CUDA_BUILD = (
@@ -34,7 +34,9 @@ cmdclass = {}
 
 if not SKIP_CUDA_BUILD:
     import torch
-    from torch.utils.cpp_extension import BuildExtension, CUDAExtension, CUDA_HOME, ROCM_HOME, IS_HIP_EXTENSION
+    from torch.utils.cpp_extension import (CUDA_HOME, IS_HIP_EXTENSION,
+                                           ROCM_HOME, BuildExtension,
+                                           CUDAExtension)
 
     BUILD_TARGET = os.environ.get("BUILD_TARGET", "auto")
 
@@ -265,48 +267,48 @@ if not SKIP_CUDA_BUILD:
             "-U__HIP_NO_HALF_CONVERSIONS__",
         ] + rocm_offload_arch
 
+        # ext_modules.append(
+        #         CUDAExtension(
+        #         name="sageattention._qattn_rocm",
+        #         sources=[
+        #             "csrc/qattn_rocm/pybind_gfx942.cpp",
+        #             # "csrc/qattn/rocm/simple_ge1d.hip",
+        #             "csrc/qattn_rocm/qk_gemm.hip",
+        #             "csrc/qattn_rocm/sv_gemm.hip",
+        #             "csrc/qattn_rocm/gfx942.hip",
+        #             # "csrc/qattn/rocm/qk2douter.hip",
+        #             # "csrc/qattn/rocm/sv2d.hip",
+        #             # "csrc/qattn/rocm/gfx942_2d.hip",
+        #         ],
+        #         include_dirs=[
+        #             # "third_party/rocwmma/library/include",
+        #             "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
+        #             os.path.join(ROCM_HOME, "include"),
+        #             os.path.join(ROCM_HOME, "include", "hip"),
+        #         ],
+        #         extra_compile_args={"cxx": rocm_cxx_flags, "nvcc": rocm_hipcc_flags},
+        #         # 这三行确保无需 LD_LIBRARY_PATH 也能找到依赖
+        #         libraries=["amdhip64", "hiprtc", "rocblas", "hipblas", "c10", "torch", "torch_python"],   # 视你代码实际用到的库增减
+        #         library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
+        #         runtime_library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],     # <— 关键
+        #     )
+        # )
+
         ext_modules.append(
-            CUDAExtension(
-            name="sageattention._qattn_rocm",
-            sources=[
-                "csrc/qattn_rocm/pybind_gfx942.cpp",
-                # "csrc/qattn/rocm/simple_ge1d.hip",
-                "csrc/qattn_rocm/qk_gemm.hip",
-                "csrc/qattn_rocm/sv_gemm.hip",
-                "csrc/qattn_rocm/gfx942.hip",
-                # "csrc/qattn/rocm/qk2douter.hip",
-                # "csrc/qattn/rocm/sv2d.hip",
-                # "csrc/qattn/rocm/gfx942_2d.hip",
-            ],
+                CUDAExtension(
+            name="sageattention._fused",
+            sources=["csrc/fused_rocm/pybind.cpp", "csrc/fused_rocm/fused.cu"],
             include_dirs=[
-                # "third_party/rocwmma/library/include",
-                "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
-                os.path.join(ROCM_HOME, "include"),
-                os.path.join(ROCM_HOME, "include", "hip"),
-            ],
+                    "third_party/rocwmma/library/include",
+                    os.path.join(ROCM_HOME, "include"),
+                    os.path.join(ROCM_HOME, "include", "hip"),
+                ],
             extra_compile_args={"cxx": rocm_cxx_flags, "nvcc": rocm_hipcc_flags},
             # 这三行确保无需 LD_LIBRARY_PATH 也能找到依赖
             libraries=["amdhip64", "hiprtc", "rocblas", "hipblas", "c10", "torch", "torch_python"],   # 视你代码实际用到的库增减
             library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
-            runtime_library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],     # <— 关键
-        )
-        )
-
-        ext_modules.append(
-            CUDAExtension(
-        name="sageattention._fused",
-        sources=["csrc/fused_rocm/pybind.cpp", "csrc/fused_rocm/fused.cu"],
-        include_dirs=[
-                "third_party/rocwmma/library/include",
-                os.path.join(ROCM_HOME, "include"),
-                os.path.join(ROCM_HOME, "include", "hip"),
-            ],
-        extra_compile_args={"cxx": rocm_cxx_flags, "nvcc": rocm_hipcc_flags},
-        # 这三行确保无需 LD_LIBRARY_PATH 也能找到依赖
-        libraries=["amdhip64", "hiprtc", "rocblas", "hipblas", "c10", "torch", "torch_python"],   # 视你代码实际用到的库增减
-        library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
-        runtime_library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
-        )
+            runtime_library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
+            )
         )
 
 
