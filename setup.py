@@ -256,16 +256,16 @@ if not SKIP_CUDA_BUILD:
             # "-Wno-error",
         ]
 
-        rocm_hipcc_flags = [
-            "-O3", "-g", "-ggdb", "-std=c++17",
-            "-DHIP_FP8_TYPE_FNUZ", "-DENABLE_BF16",
-            "-DENABLE_FP8",
-            "-save-temps",
-            "-mcumode",
-            "-fgpu-flush-denormals-to-zero",
-            "-fno-finite-math-only",
-            "-U__HIP_NO_HALF_CONVERSIONS__",
-        ] + rocm_offload_arch
+        # rocm_hipcc_flags = [
+        #     "-O3", "-g", "-ggdb", "-std=c++17",
+        #     "-DHIP_FP8_TYPE_FNUZ", "-DENABLE_BF16",
+        #     "-DENABLE_FP8",
+        #     "-save-temps",
+        #     "-mcumode",
+        #     "-fgpu-flush-denormals-to-zero",
+        #     "-fno-finite-math-only",
+        #     "-U__HIP_NO_HALF_CONVERSIONS__",
+        # ] + rocm_offload_arch
 
         # ext_modules.append(
         #         CUDAExtension(
@@ -275,7 +275,7 @@ if not SKIP_CUDA_BUILD:
         #             # "csrc/qattn/rocm/simple_ge1d.hip",
         #             "csrc/qattn_rocm/qk_gemm.hip",
         #             "csrc/qattn_rocm/sv_gemm.hip",
-        #             "csrc/qattn_rocm/gfx942.hip",
+        #             "csrc/qattn_rocm/gfx942.cu",
         #             # "csrc/qattn/rocm/qk2douter.hip",
         #             # "csrc/qattn/rocm/sv2d.hip",
         #             # "csrc/qattn/rocm/gfx942_2d.hip",
@@ -283,6 +283,40 @@ if not SKIP_CUDA_BUILD:
         #         include_dirs=[
         #             # "third_party/rocwmma/library/include",
         #             "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
+        #             os.path.join(ROCM_HOME, "include"),
+        #             os.path.join(ROCM_HOME, "include", "hip"),
+        #         ],
+        #         extra_compile_args={"cxx": rocm_cxx_flags, "nvcc": rocm_hipcc_flags},
+        #         # 这三行确保无需 LD_LIBRARY_PATH 也能找到依赖
+        #         libraries=["amdhip64", "hiprtc", "rocblas", "hipblas", "c10", "torch", "torch_python"],   # 视你代码实际用到的库增减
+        #         library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
+        #         runtime_library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],     # <— 关键
+        #     )
+        # )
+
+
+
+        # rocm_hipcc_flags = [
+        #     "-O3", "-g", "-ggdb", "-std=c++17",
+        #     # "-DHIP_FP8_TYPE_FNUZ", "-DENABLE_BF16",
+        #     # "-DENABLE_FP8",
+        #     "-save-temps",
+        #     "-mcumode",
+        #     "-fgpu-flush-denormals-to-zero",
+        #     "-fno-finite-math-only",
+        #     "-U__HIP_NO_HALF_CONVERSIONS__",
+        # ] + rocm_offload_arch
+
+        # ext_modules.append(
+        #         CUDAExtension(
+        #         name="sageattention._qattn_rocm",
+        #         sources=[
+        #             "csrc/qattn_rocm/pybind_gfx1100.cpp",
+        #             "csrc/qattn_rocm/qk_int_sv_f16_rocm_gfx1100.cu"
+        #         ],
+        #         include_dirs=[
+        #             # "third_party/rocwmma/library/include",
+        #             # "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
         #             os.path.join(ROCM_HOME, "include"),
         #             os.path.join(ROCM_HOME, "include", "hip"),
         #         ],
