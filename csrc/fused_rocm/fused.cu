@@ -28,7 +28,8 @@
 #include <hip_bf16.h>
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-typedef hip_bfloat16 nv_bfloat16;
+using nv_bfloat16 = hip_bfloat16;
+static_assert(sizeof(nv_bfloat16) == 2, "nv_bfloat16 must be 2 bytes");
 typedef __hip_bfloat162 __nv_bfloat162;
 typedef __hip_bfloat162 nv_bfloat162;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -39,16 +40,19 @@ enum class QuantType
   kInt4,
 };
 
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 __device__ __forceinline__ float bfloat16_to_float(hip_bfloat16 x) {
-    uint16_t bits16 = *reinterpret_cast<uint16_t*>(&x);
-    uint32_t bits32 = bits16;
-    bits32 <<= 16;
-    float f;
-    *reinterpret_cast<uint32_t*>(&f) = bits32;
-    return f;
+    // uint16_t bits16 = *reinterpret_cast<uint16_t*>(&x);
+    // uint32_t bits32 = bits16;
+    // bits32 <<= 16;
+    // float f;
+    // *reinterpret_cast<uint32_t*>(&f) = bits32;
+    // return f;
+    uint16_t bits16;
+    memcpy(&bits16, &x, sizeof(bits16));
+    union { uint32_t u; float f; } out;
+    out.u = uint32_t(bits16) << 16;
+    return out.f;
 }
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 template <typename T>
 __device__ __forceinline__ float convert_to_float(T val)
@@ -66,21 +70,28 @@ __device__ __forceinline__ float convert_to_float(T val)
   }
 }
 
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 __device__ __forceinline__ hip_bfloat16 float2bfloat16_rn(float x)
 {
-    uint32_t bits = reinterpret_cast<uint32_t&>(x);
+    // uint32_t bits = reinterpret_cast<uint32_t&>(x);
 
-    uint32_t lsb = (bits >> 16) & 1;
-    uint32_t rounding_bias = 0x7FFF + lsb;
+    // uint32_t lsb = (bits >> 16) & 1;
+    // uint32_t rounding_bias = 0x7FFF + lsb;
 
-    bits += rounding_bias;
+    // bits += rounding_bias;
 
-    hip_bfloat16 out;
-    *reinterpret_cast<uint16_t*>(&out) = uint16_t(bits >> 16);
-    return out;
+    // hip_bfloat16 out;
+    // *reinterpret_cast<uint16_t*>(&out) = uint16_t(bits >> 16);
+    // return out;
+    union { float f; uint32_t u; } fb;
+    fb.f = x;
+    uint32_t bits = fb.u;
+    uint32_t lsb = (bits >> 16) & 1u;
+    bits += 0x7FFFu + lsb;
+    uint16_t hi = uint16_t(bits >> 16);
+    union { uint16_t u16; hip_bfloat16 bf; } out;
+    out.u16 = hi;
+    return out.bf;
 }
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 template <typename T>
 __device__ __forceinline__ T convert_from_float(float val)

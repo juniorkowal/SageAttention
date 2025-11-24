@@ -44,14 +44,16 @@
 //   asm("cvt.f32.f16 %0, %1;" : "=f"(dest[1]) : "h"(h1));
 // }
 
-__device__ inline void unpack_half2_from_uint32_to_float(float* dest, uint32_t source) {
-    __half h0 = *reinterpret_cast<__half*>(&source);
-    __half h1 = *reinterpret_cast<__half*>(((char*)&source) + 2);
+__device__ __forceinline__ void unpack_half2_from_uint32_to_float(float* dest, uint32_t source) {
+    uint16_t h0 = source & 0xFFFF;
+    uint16_t h1 = (source >> 16) & 0xFFFF;
 
-    dest[0] = __half2float(h0);
-    dest[1] = __half2float(h1);
+    __half half0 = *reinterpret_cast<__half*>(&h0);
+    __half half1 = *reinterpret_cast<__half*>(&h1);
+
+    dest[0] = __half2float(half0);
+    dest[1] = __half2float(half1);
 }
-
 
 // __device__ __forceinline__ void floatx4_to_e4m3x4(uint32_t *dest, float *source0, float *source1)
 // {
