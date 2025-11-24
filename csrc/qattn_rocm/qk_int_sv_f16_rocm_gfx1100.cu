@@ -20,12 +20,16 @@
 #include <torch/extension.h>
 
 #include "../common_rocm/cp_async.cuh"
-#include "../common_rocm/mma.cuh"
-#include "../common_rocm/permuted_smem.cuh"
+// #include "../common_rocm/mma.cuh"
+// #include "../common_rocm/permuted_smem.cuh"
 #include "../common_rocm/math.cuh"
 #include "../common_rocm/dispatch_utils.h"
 
 #include "attn_utils.cuh"
+
+typedef hip_bfloat16 nv_bfloat16;
+typedef __hip_bfloat162 nv_bfloat162;
+
 
 #define PACK_SIZE_QK 16 // as if it is int8
 #define PACK_SIZE_V 8   // fp16
@@ -814,7 +818,8 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn(torch::Tensor query,
             auto kernel_func = qk_int_sv_f16_attn_kernel<CTA_Q, CTA_K, WARP_Q, WARP_K, HEAD_DIM, DataType::kInt8, static_cast<QuantGranularity>(QK_QUANT_GRAN), static_cast<QuantGranularity>(QK_QUANT_GRAN), float, false, DTypeOut, ComputeUnit::kTensorCore, 
                                                           mask_mode, RETURN_LSE, false>;
 
-            cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_max);
+            // cudaFuncSetAttribute(kernel_func, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_max);
+            hipFuncSetAttribute(reinterpret_cast<const void*>(kernel_func), hipFuncAttributeMaxDynamicSharedMemorySize, smem_max);
 
             dim3 grid(div_ceil(qo_len, CTA_Q), num_qo_heads, batch_size);
             dim3 block(32, (CTA_Q / WARP_Q) * (CTA_K / WARP_K));

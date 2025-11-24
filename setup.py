@@ -296,16 +296,16 @@ if not SKIP_CUDA_BUILD:
 
 
 
-        # rocm_hipcc_flags = [
-        #     "-O3", "-g", "-ggdb", "-std=c++17",
-        #     # "-DHIP_FP8_TYPE_FNUZ", "-DENABLE_BF16",
-        #     # "-DENABLE_FP8",
-        #     "-save-temps",
-        #     "-mcumode",
-        #     "-fgpu-flush-denormals-to-zero",
-        #     "-fno-finite-math-only",
-        #     "-U__HIP_NO_HALF_CONVERSIONS__",
-        # ] + rocm_offload_arch
+        rocm_hipcc_flags = [
+            "-O3", "-g", "-ggdb", "-std=c++17",
+            # "-DHIP_FP8_TYPE_FNUZ", "-DENABLE_BF16",
+            # "-DENABLE_FP8",
+            "-save-temps",
+            "-mcumode",
+            "-fgpu-flush-denormals-to-zero",
+            "-fno-finite-math-only",
+            "-U__HIP_NO_HALF_CONVERSIONS__",
+        ] + rocm_offload_arch
 
         # ext_modules.append(
         #         CUDAExtension(
