@@ -15,7 +15,7 @@
  */
 
 #pragma once
-#include <cuda.h>
+#include <hip/hip_runtime.h>
 
 namespace wgmma{
 __device__ __forceinline__ uint64_t matrix_descriptor_encode(uint64_t x) { return (((x) & 0x3FFFF) >> 0x4); }

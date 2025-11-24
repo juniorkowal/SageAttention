@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include <cuda_runtime.h>
+#include <hip/hip_runtime.h>
 
 namespace cp_async {
 
@@ -38,6 +38,8 @@ enum class PrefetchMode {
 #define CP_ASYNC_ENABLED
 #endif
 #endif
+
+// On HIP/ROCm, use fallback since async copy is limited on RDNA3
 
 /*!
  * \brief Wrapper of PTX cp.async.commit_group instruction, commit all prior uncommitted

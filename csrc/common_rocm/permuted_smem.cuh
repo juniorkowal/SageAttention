@@ -18,14 +18,14 @@
  */
 
 #pragma once
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-#include <cuda_runtime.h>
+#include <hip/hip_bf16.h>
+#include <hip/hip_fp16.h>
+#include <hip/hip_runtime.h>
 
 // #include <cuda/pipeline>
 
 #include "cp_async.cuh"
-#include "mma.cuh"
+#include "mma_hip.cuh"  // HIP/rocWMMA version of MMA
 
 enum class SwizzleMode {
   k32B, // for k32B mode, a line of shared memory must have 32B (16 half value)

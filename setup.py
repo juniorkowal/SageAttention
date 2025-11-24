@@ -307,26 +307,26 @@ if not SKIP_CUDA_BUILD:
             "-U__HIP_NO_HALF_CONVERSIONS__",
         ] + rocm_offload_arch
 
-        # ext_modules.append(
-        #         CUDAExtension(
-        #         name="sageattention._qattn_rocm",
-        #         sources=[
-        #             "csrc/qattn_rocm/pybind_gfx1100.cpp",
-        #             "csrc/qattn_rocm/qk_int_sv_f16_rocm_gfx1100.cu"
-        #         ],
-        #         include_dirs=[
-        #             # "third_party/rocwmma/library/include",
-        #             # "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
-        #             os.path.join(ROCM_HOME, "include"),
-        #             os.path.join(ROCM_HOME, "include", "hip"),
-        #         ],
-        #         extra_compile_args={"cxx": rocm_cxx_flags, "nvcc": rocm_hipcc_flags},
-        #         # 这三行确保无需 LD_LIBRARY_PATH 也能找到依赖
-        #         libraries=["amdhip64", "hiprtc", "rocblas", "hipblas", "c10", "torch", "torch_python"],   # 视你代码实际用到的库增减
-        #         library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
-        #         runtime_library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],     # <— 关键
-        #     )
-        # )
+        ext_modules.append(
+                CUDAExtension(
+                name="sageattention._qattn_rocm",
+                sources=[
+                    "csrc/qattn_rocm/pybind_gfx1100.cpp",
+                    "csrc/qattn_rocm/qk_int_sv_f16_rocm_gfx1100.cu"
+                ],
+                include_dirs=[
+                    # "third_party/rocwmma/library/include",
+                    "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
+                    os.path.join(ROCM_HOME, "include"),
+                    os.path.join(ROCM_HOME, "include", "hip"),
+                ],
+                extra_compile_args={"cxx": rocm_cxx_flags, "nvcc": rocm_hipcc_flags},
+                # 这三行确保无需 LD_LIBRARY_PATH 也能找到依赖
+                libraries=["amdhip64", "hiprtc", "rocblas", "hipblas", "c10", "torch", "torch_python"],   # 视你代码实际用到的库增减
+                library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],
+                runtime_library_dirs=ROCM_LIB_DIRS + [TORCH_LIB_DIR],     # <— 关键
+            )
+        )
 
         ext_modules.append(
                 CUDAExtension(

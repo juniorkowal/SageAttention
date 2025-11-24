@@ -21,13 +21,14 @@
 // #include <cuda_pipeline_primitives.h>
 #include <torch/extension.h>
 
-#include "../common_rocm/cp_async_hip.cuh"
+#include "../common_rocm/cp_async.cuh"
+#include "../common_rocm/mma_hip.cuh"  // HIP/rocWMMA version of MMA
 // #include "../common_rocm/mma.cuh"
-// #include "../common_rocm/permuted_smem_hip.cuh"
+// #include "../common_rocm/permuted_smem.cuh"
 #include "../common_rocm/math.cuh"
 #include "../common_rocm/dispatch_utils.h"
 
-#include "attn_utils_hip.cuh"
+#include "attn_utils.cuh"
 
 typedef hip_bfloat16 nv_bfloat16;
 typedef __hip_bfloat162 nv_bfloat162;
@@ -242,7 +243,7 @@ __global__ void qk_int_sv_f16_attn_kernel(int8_t *__restrict__ Q, int8_t *__rest
     for (uint32_t fq = 0; fq < num_tiles_q; fq++)
     {
       smem_Q.ldmatrix_m8n8x4(Q_smem_offset_mma, RQ[fq]);
-      Q_smem_offset_mma = smem_Q.advance_offset_by_row<16>(Q_smem_offset_mma);
+      Q_smem_offset_mma = smem_Q.template advance_offset_by_row<16>(Q_smem_offset_mma);
     }
   }
 
@@ -652,10 +653,10 @@ __global__ void qk_int_sv_f16_attn_kernel(int8_t *__restrict__ Q, int8_t *__rest
         smem_O.store_128b(offset_O, O_lane_ptr);
       }
       O_lane_ptr += (global_to_shared_line_lanes_O * PACK_SIZE_O);
-      offset_O = smem_O.advance_offset_by_column<global_to_shared_line_lanes_O>(offset_O);
+      offset_O = smem_O.template advance_offset_by_column<global_to_shared_line_lanes_O>(offset_O);
     }
 
-    offset_O = smem_O.advance_offset_by_row<global_to_shared_copy_lines_per_warp_O>(offset_O - (O_smem_iters_row * global_to_shared_line_lanes_O));
+    offset_O = smem_O.template advance_offset_by_row<global_to_shared_copy_lines_per_warp_O>(offset_O - (O_smem_iters_row * global_to_shared_line_lanes_O));
     O_lane_ptr += ((global_to_shared_copy_lines_per_warp_O * stride_seq_o) - (O_smem_iters_row * global_to_shared_line_lanes_O * PACK_SIZE_O));
     O_load_idx_lane_base += global_to_shared_copy_lines_per_warp_O;
   }

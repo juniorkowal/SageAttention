@@ -33,12 +33,12 @@ namespace mma{
 #define MMA_S8S8S32_M16N8K32_ENABLED
 #define MMA_S4S4S32_M16N8K64_ENABLED
 // #endif
-#if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 750))
+// #if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 750))
 #define MMA_F16F16F32_M16N8K8_ENABLED
 #define MMA_F16F16F16_M16N8K8_ENABLED
 #define LDMATRIX_M8N8X2_ENABLED
 #define LDMATRIX_M8N8X4_ENABLED
-#endif
+// #endif
 // #endif
 
 // #if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120400)

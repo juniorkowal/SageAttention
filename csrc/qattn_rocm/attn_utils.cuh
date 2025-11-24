@@ -16,12 +16,12 @@
 
 #pragma once
 #include "../common_rocm/utils.cuh"
-#include <cuda_fp16.h>
+#include <hip/hip_fp16.h>
+#include "../common_rocm/mma_hip.cuh"  // HIP/rocWMMA version of MMA - must be early
 // #include <cuda_pipeline_primitives.h>
 #include <torch/extension.h>
 
 #include "../common_rocm/cp_async.cuh"
-#include "../common_rocm/mma.cuh"
 #include "../common_rocm/permuted_smem.cuh"
 #include "../common_rocm/numeric_conversion.cuh"
 
@@ -99,10 +99,10 @@ __device__ __forceinline__ void load_global_to_share(T **lane_ptr, uint32_t &sme
     {
       smem.load_128b_async(smem_offset, *lane_ptr);
       *lane_ptr += (global_to_shared_line_lanes * pack_size);
-      smem_offset = smem.advance_offset_by_column<global_to_shared_line_lanes>(smem_offset);
+      smem_offset = smem.template advance_offset_by_column<global_to_shared_line_lanes>(smem_offset);
     }
 
-    smem_offset = smem.advance_offset_by_row<global_to_shared_copy_lines_per_warp_per_iter>(smem_offset - (smem_iters_row * global_to_shared_line_lanes));
+    smem_offset = smem.template advance_offset_by_row<global_to_shared_copy_lines_per_warp_per_iter>(smem_offset - (smem_iters_row * global_to_shared_line_lanes));
     *lane_ptr += ((global_to_shared_copy_lines_per_warp_per_iter * gmem_stride) - (smem_iters_row * global_to_shared_line_lanes * pack_size));
   }
   smem_offset -= (smem_iters_col * global_to_shared_copy_lines_per_warp_per_iter * stride);
@@ -127,12 +127,12 @@ __device__ __forceinline__ void load_global_to_share(T **lane_ptr, uint32_t &sme
 #pragma unroll
     for (uint32_t j = 0; j < smem_iters_row; j++)
     {
-      smem.load_128b_async<cp_async::SharedMemFillMode::kNoFill>(smem_offset, *lane_ptr, base_idx < max_len);
+      smem.template load_128b_async<cp_async::SharedMemFillMode::kNoFill, T>(smem_offset, *lane_ptr, base_idx < max_len);
       *lane_ptr += (global_to_shared_line_lanes * pack_size);
-      smem_offset = smem.advance_offset_by_column<global_to_shared_line_lanes>(smem_offset);
+      smem_offset = smem.template advance_offset_by_column<global_to_shared_line_lanes>(smem_offset);
     }
 
-    smem_offset = smem.advance_offset_by_row<global_to_shared_copy_lines_per_warp_per_iter>(smem_offset - (smem_iters_row * global_to_shared_line_lanes));
+    smem_offset = smem.template advance_offset_by_row<global_to_shared_copy_lines_per_warp_per_iter>(smem_offset - (smem_iters_row * global_to_shared_line_lanes));
     *lane_ptr += ((global_to_shared_copy_lines_per_warp_per_iter * gmem_stride) - (smem_iters_row * global_to_shared_line_lanes * pack_size));
     base_idx += global_to_shared_copy_lines_per_warp_per_iter;
   }
@@ -157,10 +157,10 @@ __device__ __forceinline__ void load_fp8_V_global_to_share(int8_t **lane_ptr, ui
     {
       smem.load_128b_async(smem_offset, *lane_ptr);
       *lane_ptr += (global_to_shared_line_lanes * pack_size_fp8);
-      smem_offset = smem.advance_offset_by_column<global_to_shared_line_lanes>(smem_offset);
+      smem_offset = smem.template advance_offset_by_column<global_to_shared_line_lanes>(smem_offset);
     }
 
-    smem_offset = smem.advance_offset_by_row<global_to_shared_copy_lines_per_warp_per_iter>(smem_offset - (smem_iters_row * global_to_shared_line_lanes));
+    smem_offset = smem.template advance_offset_by_row<global_to_shared_copy_lines_per_warp_per_iter>(smem_offset - (smem_iters_row * global_to_shared_line_lanes));
     *lane_ptr += ((global_to_shared_copy_lines_per_warp_per_iter * gmem_stride) - (smem_iters_row * global_to_shared_line_lanes * pack_size_fp8));
   }
   smem_offset -= (smem_iters_col * global_to_shared_copy_lines_per_warp_per_iter * stride);
@@ -188,17 +188,17 @@ __device__ __forceinline__ void compute_int_qk(const smem_t<swizzle_mode, stride
     for (uint32_t fq = 0; fq < num_tiles_q; fq++)
     {
       smem_Q.ldmatrix_m8n8x4(offset_Q, RQ[fq]);
-      offset_Q = smem_Q.advance_offset_by_row<16>(offset_Q);
+      offset_Q = smem_Q.template advance_offset_by_row<16>(offset_Q);
     }
     // ! using permutation invariance
-    offset_Q = smem_Q.advance_offset_by_column<2>(offset_Q - (num_tiles_q * 16 * stride), iter);
+    offset_Q = smem_Q.template advance_offset_by_column<2>(offset_Q - (num_tiles_q * 16 * stride), iter);
 
 #pragma unroll
     for (uint32_t fk = 0; fk < num_tiles_k; fk++)
     {
       // load RK
       smem_K.ldmatrix_m8n8x4(offset_K, RK);
-      offset_K = smem_K.advance_offset_by_row<16>(offset_K);
+      offset_K = smem_K.template advance_offset_by_row<16>(offset_K);
 
       // mma
 #pragma unroll
@@ -214,7 +214,7 @@ __device__ __forceinline__ void compute_int_qk(const smem_t<swizzle_mode, stride
         }
       }
     }
-    offset_K = smem_K.advance_offset_by_column<2>(offset_K - (num_tiles_k * 16 * stride), iter);
+    offset_K = smem_K.template advance_offset_by_column<2>(offset_K - (num_tiles_k * 16 * stride), iter);
   }
 
   // following iteration, mma mode is kInplace
@@ -226,16 +226,16 @@ __device__ __forceinline__ void compute_int_qk(const smem_t<swizzle_mode, stride
     for (uint32_t fq = 0; fq < num_tiles_q; fq++)
     {
       smem_Q.ldmatrix_m8n8x4(offset_Q, RQ[fq]);
-      offset_Q = smem_Q.advance_offset_by_row<16>(offset_Q);
+      offset_Q = smem_Q.template advance_offset_by_row<16>(offset_Q);
     }
-    offset_Q = smem_Q.advance_offset_by_column<2>(offset_Q - (num_tiles_q * 16 * stride), iter);
+    offset_Q = smem_Q.template advance_offset_by_column<2>(offset_Q - (num_tiles_q * 16 * stride), iter);
 
 #pragma unroll
     for (uint32_t fk = 0; fk < num_tiles_k; fk++)
     {
       // load RK
       smem_K.ldmatrix_m8n8x4(offset_K, RK);
-      offset_K = smem_K.advance_offset_by_row<16>(offset_K);
+      offset_K = smem_K.template advance_offset_by_row<16>(offset_K);
 
       // mma
 #pragma unroll
@@ -251,7 +251,7 @@ __device__ __forceinline__ void compute_int_qk(const smem_t<swizzle_mode, stride
         }
       }
     }
-    offset_K = smem_K.advance_offset_by_column<2>(offset_K - (num_tiles_k * 16 * stride), iter);
+    offset_K = smem_K.template advance_offset_by_column<2>(offset_K - (num_tiles_k * 16 * stride), iter);
   }
 
   offset_Q -= (2 * num_tiles_qk_inner);
@@ -275,7 +275,7 @@ __device__ __forceinline__ void compute_int_qk(const smem_t<swizzle_mode, stride
   {
     // load RK
     smem_K.ldmatrix_m8n8x4(offset_K, RK);
-    offset_K = smem_K.advance_offset_by_row<16>(offset_K);
+    offset_K = smem_K.template advance_offset_by_row<16>(offset_K);
 
     // mma
 #pragma unroll
@@ -389,8 +389,8 @@ __device__ __forceinline__ void update_mdo(float RS[][num_tiles_k][8], DTypeSVAc
       }
 
       // exchange element with the 4 threads in the row
-      m_temp = max(m_temp, __shfl_xor_sync(0xffffffff, m_temp, 0x1)); // 0 exchange with 1, 2 exchange with 3
-      m_temp = max(m_temp, __shfl_xor_sync(0xffffffff, m_temp, 0x2)); // 0 exchange with 2, 1 exchange with 3
+      m_temp = max(m_temp, __shfl_xor_sync(0xffffffffffffffffULL, m_temp, 0x1)); // 0 exchange with 1, 2 exchange with 3
+      m_temp = max(m_temp, __shfl_xor_sync(0xffffffffffffffffULL, m_temp, 0x2)); // 0 exchange with 2, 1 exchange with 3
 
       m[fq][k] = max(m[fq][k], m_temp);
 
@@ -632,9 +632,9 @@ __device__ __forceinline__ void compute_fp16_sv_permuted(const smem_t<swizzle_mo
         }
       }
 
-      offset_V = smem_V.advance_offset_by_column<2>(offset_V, fv);
+      offset_V = smem_V.template advance_offset_by_column<2>(offset_V, fv);
     }
-    offset_V = smem_V.advance_offset_by_row<16>(offset_V - (2 * num_tiles_v));
+    offset_V = smem_V.template advance_offset_by_row<16>(offset_V - (2 * num_tiles_v));
   }
 
   // make offset_V their original value
@@ -669,9 +669,9 @@ __device__ __forceinline__ void compute_fp16_sv_permuted_inst_buf(const smem_t<s
         }
       }
 
-      offset_V = smem_V.advance_offset_by_column<2>(offset_V, fv);
+      offset_V = smem_V.template advance_offset_by_column<2>(offset_V, fv);
     }
-    offset_V = smem_V.advance_offset_by_row<16>(offset_V - (2 * num_tiles_v));
+    offset_V = smem_V.template advance_offset_by_row<16>(offset_V - (2 * num_tiles_v));
   }
 
 #pragma unroll
@@ -691,9 +691,9 @@ __device__ __forceinline__ void compute_fp16_sv_permuted_inst_buf(const smem_t<s
         }
       }
 
-      offset_V = smem_V.advance_offset_by_column<2>(offset_V, fv);
+      offset_V = smem_V.template advance_offset_by_column<2>(offset_V, fv);
     }
-    offset_V = smem_V.advance_offset_by_row<16>(offset_V - (2 * num_tiles_v));
+    offset_V = smem_V.template advance_offset_by_row<16>(offset_V - (2 * num_tiles_v));
   }
 
   // accumulate into RO
@@ -733,8 +733,8 @@ __device__ __forceinline__ void normalize_d(DTypeSVAccum RO[][num_tiles_v][8], D
 #pragma unroll
       for (uint32_t k = 0; k < 2; k++)
       {
-        d[fq][k] += __shfl_xor_sync(0xffffffff, d[fq][k], 0x1); // sum 0 and 1, 2 and 3
-        d[fq][k] += __shfl_xor_sync(0xffffffff, d[fq][k], 0x2); // sum 0 and 2, 1 and 3
+        d[fq][k] += __shfl_xor_sync(0xffffffffffffffffULL, d[fq][k], 0x1); // sum 0 and 1, 2 and 3
+        d[fq][k] += __shfl_xor_sync(0xffffffffffffffffULL, d[fq][k], 0x2); // sum 0 and 2, 1 and 3
       }
     }
   }
@@ -805,7 +805,7 @@ __device__ __forceinline__ void compute_fp8_sv(const smem_t<swizzle_mode, stride
           // ! Not Implemented
         }
       }
-      offset_V = smem_V.advance_offset_by_row<16>(offset_V);
+      offset_V = smem_V.template advance_offset_by_row<16>(offset_V);
     }
   }
 }
@@ -844,7 +844,7 @@ __device__ __forceinline__ void compute_fp8_sv_inst_buf(const smem_t<swizzle_mod
           // ! Not Implemented
         }
       }
-      offset_V = smem_V.advance_offset_by_row<16>(offset_V);
+      offset_V = smem_V.template advance_offset_by_row<16>(offset_V);
     }
   }
 
@@ -871,7 +871,7 @@ __device__ __forceinline__ void compute_fp8_sv_inst_buf(const smem_t<swizzle_mod
           // ! Not Implemented
         }
       }
-      offset_V = smem_V.advance_offset_by_row<16>(offset_V);
+      offset_V = smem_V.template advance_offset_by_row<16>(offset_V);
     }
   }
 
@@ -928,7 +928,7 @@ __device__ __forceinline__ void compute_fp8_sv_inst_buf_fp16_accu(const smem_t<s
           // ! Not Implemented
         }
       }
-      offset_V = smem_V.advance_offset_by_row<16>(offset_V);
+      offset_V = smem_V.template advance_offset_by_row<16>(offset_V);
     }
   }
 
@@ -956,7 +956,7 @@ __device__ __forceinline__ void compute_fp8_sv_inst_buf_fp16_accu(const smem_t<s
           // ! Not Implemented
         }
       }
-      offset_V = smem_V.advance_offset_by_row<16>(offset_V);
+      offset_V = smem_V.template advance_offset_by_row<16>(offset_V);
     }
   }
   float RO_tmp_float[2];
