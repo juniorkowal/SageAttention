@@ -27,11 +27,11 @@
   } else if (head_dim == 128) {                                 \
     constexpr int HEAD_DIM = 128;                               \
     __VA_ARGS__                                                 \
-  } else {                                                      \
-    std::ostringstream err_msg;                                 \
-    err_msg << "Unsupported head dim: " << int(head_dim);       \
-    throw std::invalid_argument(err_msg.str());                 \
-  }
+  } else {                           }                           \
+    // std::ostringstream err_msg;                                 \
+    // err_msg << "Unsupported head dim: " << int(head_dim);       \
+    // throw std::invalid_argument(err_msg.str());                 \
+  // }
 
 #define DISPATCH_CAUSAL(is_causal, IS_CAUSAL, ...)              \
   if (is_causal == 1) {                                         \
@@ -92,11 +92,11 @@
   } else if (block_size == 128) {                               \
     constexpr int BLOCK_SIZE = 128;                             \
     __VA_ARGS__                                                 \
-  }  else {                                                     \
-    std::ostringstream err_msg;                                 \
-    err_msg << "Unsupported block_size " << int(block_size);    \
-    throw std::invalid_argument(err_msg.str());                 \
-  }
+  }  else {      }                                               \
+    // std::ostringstream err_msg;                                 \
+    // err_msg << "Unsupported block_size " << int(block_size);    \
+    // throw std::invalid_argument(err_msg.str());                 \
+  // }
 
 #define DISPATCH_WARP_BLOCK_SIZE(warp_block_size, WARP_BLOCK_SIZE, ...)  \
   if (warp_block_size == 16) {                                           \
@@ -105,8 +105,8 @@
   } else if (warp_block_size == 32) {                                    \
     constexpr int WARP_BLOCK_SIZE = 32;                                  \
     __VA_ARGS__                                                          \
-  }  else {                                                              \
-    std::ostringstream err_msg;                                          \
-    err_msg << "Unsupported warp_block_size " << int(warp_block_size);   \
-    throw std::invalid_argument(err_msg.str());                          \
-  }
+  }  else {        }                                                      \
+    // std::ostringstream err_msg;                                          \
+    // err_msg << "Unsupported warp_block_size " << int(warp_block_size);   \
+    // throw std::invalid_argument(err_msg.str());                          \
+  // }

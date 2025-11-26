@@ -18,47 +18,46 @@
  */
 
 #pragma once
-#include <hip/hip_bf16.h>
-#include <hip/hip_fp16.h>
-#include <hip/hip_runtime.h>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
+#include <cuda_runtime.h>
 #include <type_traits>
-#include <rocwmma/rocwmma.hpp>
 
 namespace mma{
 
-// #if (__CUDACC_VER_MAJOR__ >= 11)
-// #if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 800))
+#if (__CUDACC_VER_MAJOR__ >= 11)
+#if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 800))
 #define MMA_F16F16F32_M16N8K16_ENABLED
 #define MMA_F16F16F16_M16N8K16_ENABLED
 #define MMA_S8S8S32_M16N8K32_ENABLED
 #define MMA_S4S4S32_M16N8K64_ENABLED
-// #endif
-// #if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 750))
+#endif
+#if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 750))
 #define MMA_F16F16F32_M16N8K8_ENABLED
 #define MMA_F16F16F16_M16N8K8_ENABLED
 #define LDMATRIX_M8N8X2_ENABLED
 #define LDMATRIX_M8N8X4_ENABLED
-// #endif
-// #endif
+#endif
+#endif
 
-// #if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120400)
-// #if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 890))
+#if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120400)
+#if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 890))
 #define MMA_F8F8F32_M16N8K16_ENABLED
-// #endif
-// #endif
+#endif
+#endif
 
-// #if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120800)
-// #if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 890))
+#if (__CUDACC_VER_MAJOR__ * 10000 + __CUDACC_VER_MINOR__ * 100 >= 120800)
+#if (!defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 890))
 #define MMA_F8F8F16_M16N8K16_ENABLED
-// #endif
-// #endif
+#endif
+#endif
 
-// #if defined(__CUDA_ARCH__)
-// #define RUNTIME_ASSERT(x) __brkpt()
-// #else
+#if defined(__CUDA_ARCH__)
+#define RUNTIME_ASSERT(x) __brkpt()
+#else
 #include <assert.h>
 #define RUNTIME_ASSERT(x) assert(0 && x)
-// #endif
+#endif
 
 enum class MMAMode {
   kInit = 0U,
@@ -719,5 +718,8 @@ __device__ __forceinline__ void rowsum_f8f8f32(float* d, uint32_t* s) {
   RUNTIME_ASSERT("Unsupported CUDA architecture for mma instruction");
 #endif
 }
+
+
+
 
 } // namespace mma

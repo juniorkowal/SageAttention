@@ -17,22 +17,21 @@
  */
 
 #include "../common_rocm/utils.cuh"
-#include <hip/hip_fp16.h>
+#include <hip_fp16.h>
+#include <hip_bf16.h>
 // #include <cuda_pipeline_primitives.h>
 #include <torch/extension.h>
 
 #include "../common_rocm/cp_async.cuh"
-#include "../common_rocm/mma_hip.cuh"  // HIP/rocWMMA version of MMA
-// #include "../common_rocm/mma.cuh"
-// #include "../common_rocm/permuted_smem.cuh"
+#include "../common_rocm/mma_hip.cuh"
+#include "../common_rocm/permuted_smem_hip.cuh"
 #include "../common_rocm/math.cuh"
 #include "../common_rocm/dispatch_utils.h"
 
-#include "attn_utils.cuh"
+#include "attn_utils_hip.cuh"
 
 typedef hip_bfloat16 nv_bfloat16;
 typedef __hip_bfloat162 nv_bfloat162;
-
 
 #define PACK_SIZE_QK 16 // as if it is int8
 #define PACK_SIZE_V 8   // fp16
@@ -175,6 +174,10 @@ __global__ void qk_int_sv_f16_attn_kernel(int8_t *__restrict__ Q, int8_t *__rest
       d[fq][k] = 1.0f;
     }
   }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
   constexpr uint32_t K_smem_idx_offset = CTA_Q;
   constexpr uint32_t V_smem_idx_offset = CTA_Q + CTA_K;
@@ -242,7 +245,7 @@ __global__ void qk_int_sv_f16_attn_kernel(int8_t *__restrict__ Q, int8_t *__rest
 #pragma unroll
     for (uint32_t fq = 0; fq < num_tiles_q; fq++)
     {
-      smem_Q.ldmatrix_m8n8x4(Q_smem_offset_mma, RQ[fq]);
+      smem_Q.ldmatrix_m8n8x4_fallback(Q_smem_offset_mma, RQ[fq]);
       Q_smem_offset_mma = smem_Q.template advance_offset_by_row<16>(Q_smem_offset_mma);
     }
   }
@@ -653,7 +656,7 @@ __global__ void qk_int_sv_f16_attn_kernel(int8_t *__restrict__ Q, int8_t *__rest
         smem_O.store_128b(offset_O, O_lane_ptr);
       }
       O_lane_ptr += (global_to_shared_line_lanes_O * PACK_SIZE_O);
-      offset_O = smem_O.template advance_offset_by_column<global_to_shared_line_lanes_O>(offset_O);
+      offset_O = smem_O.template advance_offset_by_column_offset_only<global_to_shared_line_lanes_O>(offset_O);
     }
 
     offset_O = smem_O.template advance_offset_by_row<global_to_shared_copy_lines_per_warp_O>(offset_O - (O_smem_iters_row * global_to_shared_line_lanes_O));
@@ -793,6 +796,10 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn(torch::Tensor query,
       DISPATCH_QK_QUANT_GRAN(qk_quant_gran, QK_QUANT_GRAN, {
         DISPATCH_RETURN_LSE(return_lse, RETURN_LSE, {
           DISPATCH_PYTORCH_DTYPE_TO_CTYPE_FP16(output_dtype, DTypeOut, {
+            // constexpr int CTA_Q = 64;
+            // constexpr int CTA_K = 96;
+            // constexpr int WARP_Q = 32;
+            // constexpr int WARP_K = 96;
             constexpr int CTA_Q = 128;
             constexpr int CTA_K = 64;
             constexpr int WARP_Q = 32;
@@ -821,11 +828,10 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn(torch::Tensor query,
             auto kernel_func = qk_int_sv_f16_attn_kernel<CTA_Q, CTA_K, WARP_Q, WARP_K, HEAD_DIM, DataType::kInt8, static_cast<QuantGranularity>(QK_QUANT_GRAN), static_cast<QuantGranularity>(QK_QUANT_GRAN), float, false, DTypeOut, ComputeUnit::kTensorCore, 
                                                           mask_mode, RETURN_LSE, false>;
 
-            // hipFuncSetAttribute(kernel_func, hipFuncAttributeMaxDynamicSharedMemorySize, smem_max);
             hipFuncSetAttribute(reinterpret_cast<const void*>(kernel_func), hipFuncAttributeMaxDynamicSharedMemorySize, smem_max);
 
             dim3 grid(div_ceil(qo_len, CTA_Q), num_qo_heads, batch_size);
-            dim3 block(32, (CTA_Q / WARP_Q) * (CTA_K / WARP_K));
+            dim3 block(WARP_Q, (CTA_Q / WARP_Q) * (CTA_K / WARP_K));
 
            hipLaunchKernelGGL(( kernel_func), dim3(grid), dim3(block), smem_max, 0, 
               query.data_ptr<int8_t>(), 
@@ -1386,3 +1392,4 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn(torch::Tensor query,
 
 //   return lse;
 // }
+

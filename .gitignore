@@ -20,3 +20,4 @@ evaluate/
 *.bc
 *.s
 fused.hip
+*.hip

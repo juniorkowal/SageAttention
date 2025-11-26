@@ -315,8 +315,8 @@ if not SKIP_CUDA_BUILD:
                     "csrc/qattn_rocm/qk_int_sv_f16_rocm_gfx1100.cu"
                 ],
                 include_dirs=[
-                    # "third_party/rocwmma/library/include",
-                    "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
+                    "third_party/rocwmma/library/include",
+                    # "/workspaces/torch-2-8-rocm/mi300SageAttention/third_party/rocWMMA/library/include",
                     os.path.join(ROCM_HOME, "include"),
                     os.path.join(ROCM_HOME, "include", "hip"),
                 ],

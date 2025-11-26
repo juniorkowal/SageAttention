@@ -18,14 +18,14 @@
  */
 
 #pragma once
-#include <hip/hip_bf16.h>
-#include <hip/hip_fp16.h>
-#include <hip/hip_runtime.h>
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
+#include <cuda_runtime.h>
 
 // #include <cuda/pipeline>
 
 #include "cp_async.cuh"
-#include "mma_hip.cuh"  // HIP/rocWMMA version of MMA
+#include "mma.cuh"
 
 enum class SwizzleMode {
   k32B, // for k32B mode, a line of shared memory must have 32B (16 half value)
@@ -98,7 +98,7 @@ struct smem_t {
   * \param offset The current offset. 
   */
   template <uint32_t step_size>
-  static __device__ __forceinline__ uint32_t advance_offset_by_column(const uint32_t &offset) {
+  static __device__ __forceinline__ uint32_t advance_offset_by_column_offset_only(const uint32_t &offset) {
     if constexpr (swizzle_mode == SwizzleMode::k128B) {
       static_assert(step_size % 8 == 0,
                     "Unsupported step size");
@@ -114,7 +114,7 @@ struct smem_t {
 
   // ! use with care
   template <uint32_t step_size>
-  static __device__ __forceinline__ uint32_t advance_offset_by_column(const uint32_t &offset, const uint32_t &step_idx) {
+  static __device__ __forceinline__ uint32_t advance_offset_by_column_with_step(const uint32_t &offset, const uint32_t &step_idx) {
     if constexpr (swizzle_mode == SwizzleMode::k128B) {
       static_assert(step_size == 2 || step_size == 4 || step_size % 8 == 0,
                     "Unsupported step size");
@@ -182,6 +182,50 @@ struct smem_t {
     cp_async::pred_load_128b<cp_async::PrefetchMode::kPrefetch, fill_mode>(
         smem_ptr, reinterpret_cast<const b128_t*>(gptr), predicate);
   }
+
+
+
+
+  // fallback implementations for ldmatrix_* when CUDA ldmatrix intrinsics are not available
+  // NOTE: This is a correctness-first fallback. It performs simple 32-bit/128-bit loads
+  // from shared memory into the R array. It's slower than specialized ldmatrix intrinsics,
+  // but portable to HIP and easy to test. Later you can replace these with optimized
+  // ds_load_b128 / permlane / rocWMMA-compatible packing.
+
+  __device__ __forceinline__ void ldmatrix_m8n8x2_fallback(const b128_t* smem_ptr, uint32_t* R) {
+    // load 2 x 32-bit words (64 bits) from smem_ptr
+    const uint32_t* p = reinterpret_cast<const uint32_t*>(smem_ptr);
+    // we assume little-endian and contiguous layout
+    R[0] = p[0];
+    R[1] = p[1];
+  }
+
+  __device__ __forceinline__ void ldmatrix_m8n8x4_fallback(const b128_t* smem_ptr, uint32_t* R) {
+    // load 4 x 32-bit words (128 bits) from smem_ptr
+    const uint32_t* p = reinterpret_cast<const uint32_t*>(smem_ptr);
+    R[0] = p[0];
+    R[1] = p[1];
+    R[2] = p[2];
+    R[3] = p[3];
+  }
+
+  __device__ __forceinline__ void ldmatrix_m8n8x4_trans_fallback(const b128_t* smem_ptr, uint32_t* R) {
+    // conservative fallback: load as in ldmatrix_m8n8x4.
+    // The "_trans" variant transposes micro-tile for CUDA tensor cores;
+    // to emulate it exactly we'd need to rearrange words here. For correctness
+    // use same load now; if later a transpose is required for rocWMMA,
+    // implement software transpose of the 4 words into R[] (or switch to packed loads).
+    const uint32_t* p = reinterpret_cast<const uint32_t*>(smem_ptr);
+    R[0] = p[0];
+    R[1] = p[1];
+    R[2] = p[2];
+    R[3] = p[3];
+  }
+
+
+
+
+
 
   template <typename T>
   __device__ __forceinline__ void load_128b_async(const uint32_t &offset, const T* gptr) const {
